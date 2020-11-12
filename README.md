@@ -20,3 +20,13 @@
     - None
   - Returns:
     - None. Sets self.alpha
+- name:
+  - Parameters:
+    - None
+  - Returns:
+    - Safe copy of self.__name
+- model:
+  - Parameters:
+    - None
+  - Returns:
+    - Safe copy of self.__model
