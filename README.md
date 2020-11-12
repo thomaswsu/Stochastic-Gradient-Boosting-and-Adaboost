@@ -31,3 +31,10 @@
     - None
   - Returns:
     - Safe copy of self.__model
+
+### Classify
+- Parameters:
+  - data: Y_data to reclassify
+  - classification: Index of the positive classifier
+- Return:
+  - array of +1,-1 according to classification based on positive classifier
