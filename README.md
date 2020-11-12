@@ -8,7 +8,7 @@
 - miss_classify:
   - Parameters:
     - data: X_data to be classified
-    - eval: Y_data to be compared to
+    - eval_data: Y_data to be compared to
   - Returns:
     - None. Appends missclassified datapoints to private array
 - calc_error_rate;
