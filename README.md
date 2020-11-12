@@ -8,6 +8,7 @@
 - miss_classify:
   - Parameters:
     - data: X_data to be classified
+    - eval_data: Y_data to be compared to
   - Returns:
     - None. Appends missclassified datapoints to private array
 - calc_error_rate;
@@ -20,3 +21,13 @@
     - None
   - Returns:
     - None. Sets self.alpha
+- name:
+  - Parameters:
+    - None
+  - Returns:
+    - Safe copy of self.__name
+- model:
+  - Parameters:
+    - None
+  - Returns:
+    - Safe copy of self.__model
