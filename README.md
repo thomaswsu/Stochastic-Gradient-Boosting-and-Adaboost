@@ -1,7 +1,9 @@
 # Stochastic-Gradient-Boosting-and-Adaboost
 
 ## Classes
+
 ### WeakLearner
+
 - Parameters:
   - model: A model to run predictions on (for us, either DoubleTree or SingleNN)
   - i: integer representing which iteration of boosting we are on
@@ -33,6 +35,7 @@
     - Safe copy of self.__model
 
 ### Classify
+
 - Parameters:
   - data: Y_data to reclassify
   - classification: Index of the positive classifier
