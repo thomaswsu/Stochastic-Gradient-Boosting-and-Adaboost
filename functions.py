@@ -38,8 +38,8 @@ def classify(data, classification):
 
 # Voting: returns +1 or -1
 def eval_H(d,H):
-    return np.sign(np.sum([h.alpha_*h.f(d) for h in H]))
-    
+    return np.sign(np.sum([h.alpha_*h.model().predict(d) for h in H]))
+
 def H_accuracy(H,data):
     tot = len(data)
     c = 0
