@@ -28,7 +28,7 @@ class WeakLearner:
         self.error_rate = np.sum(w[self.miss_data])
     
     def calc_voting_power(self):
-        self.__alpha = 1/2*np.log((1-self.error_rate)/self.error_rate)
+        self.alpha_ = 1/2*np.log((1-self.error_rate)/self.error_rate)
         
 def ShallowTree(d = 2):
     return DecisionTreeClassifier(max_depth=d)
