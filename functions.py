@@ -35,3 +35,14 @@ def ShallowTree(d = 2):
 
 def classify(data, classification):
     return [1 if np.where(d == 1)[0][0] == classification else -1 for d in data]
+
+# Voting: returns +1 or -1
+def eval_H(d,H):
+    return np.sign(np.sum([h.alpha_*h.f(d) for h in H]))
+    
+def H_accuracy(H,data):
+    tot = len(data)
+    c = 0
+    for d in data:
+        c += eval_H(d,H)
+    return c/tot
