@@ -8,7 +8,7 @@ class WeakLearner:
         self.miss_data = None
         self.error_rate = None
     
-    def __sign(self, val):
+    def sign(self, val):
         return 1 if val > 0 else -1
     
     def name(self):
@@ -21,7 +21,7 @@ class WeakLearner:
         self.miss_data = []
         y_pred = self.__model.predict(data)
         for i in range(len(y_pred)):
-            if self.__sign(y_pred[i]) != self.__sign(eval_data[i]):
+            if self.sign(y_pred[i]) != self.sign(eval_data[i]):
                 self.miss_data.append(i)
         
     def calc_error_rate(self, w):
@@ -37,12 +37,18 @@ def classify(data, classification):
     return [1 if np.where(d == 1)[0][0] == classification else -1 for d in data]
 
 # Voting: returns +1 or -1
-def eval_H(d,H):
-    return np.sign(np.sum([h.alpha_*h.model().predict(d) for h in H]))
+def eval_P(P, eval_set, h):
+    return [1 if h.sign(P[i]) == h.sign(eval_set[i]) else -1 for i in range(len(P))]
 
-def H_accuracy(H,data):
-    tot = len(data)
-    c = 0
-    for d in data:
-        c += eval_H(d,H)
-    return c/tot
+def H_accuracy(H, data, eval_set):
+    c = []
+    for h in H:
+        results = eval_P(h.model().predict(data), eval_set, h)
+        if not c:
+            c.extend(results)
+        else:
+            for i in range(len(results)):
+                c[i] += results[i]
+    for i in range(len(c)):
+        c[i] = c[i] / len(H)
+    return sum(c)/len(c)
