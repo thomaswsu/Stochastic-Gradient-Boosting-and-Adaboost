@@ -28,10 +28,21 @@ class WeakLearner:
         self.error_rate = np.sum(w[self.miss_data])
     
     def calc_voting_power(self):
-        self.__alpha = 1/2*np.log((1-self.error_rate)/self.error_rate)
+        self.alpha_ = 1/2*np.log((1-self.error_rate)/self.error_rate)
         
 def ShallowTree(d = 2):
     return DecisionTreeClassifier(max_depth=d)
 
 def classify(data, classification):
     return [1 if np.where(d == 1)[0][0] == classification else -1 for d in data]
+
+# Voting: returns +1 or -1
+def eval_H(d,H):
+    return np.sign(np.sum([h.alpha_*h.model().predict(d) for h in H]))
+
+def H_accuracy(H,data):
+    tot = len(data)
+    c = 0
+    for d in data:
+        c += eval_H(d,H)
+    return c/tot
