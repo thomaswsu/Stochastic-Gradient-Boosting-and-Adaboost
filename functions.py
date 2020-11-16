@@ -20,9 +20,10 @@ class WeakLearner:
     def miss_classify(self, data, eval_data):
         self.miss_data = []
         y_pred = self.__model.predict(data)
-        for i in range(len(y_pred)):
-            if self.sign(y_pred[i]) != self.sign(eval_data[i]):
-                self.miss_data.append(i)
+        self.miss_data.extend(np.where(y_pred != eval_data)[0].tolist())
+        # for i in range(len(y_pred)):
+        #     if self.sign(y_pred[i]) != self.sign(eval_data[i]):
+        #         self.miss_data.append(i)
         
     def calc_error_rate(self, w):
         self.error_rate = np.sum(w[self.miss_data])
