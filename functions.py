@@ -1,6 +1,37 @@
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
+import csv
 
+def data_formating(losses, accuracies):
+    f_data = []
+    
+    for i in range(len(losses[0])):
+        row = []
+        for j in range(len(losses)):
+            row.append(losses[j][i])
+            row.append(accuracies[j][i])
+        f_data.append(row)
+    
+    return f_data
+
+
+def csv_formater(file_name, lower, higher, losses, accuracies):
+    file_name = file_name + ".csv"
+    with open(file_name, 'w', newline='') as csvfile:
+        fieldnames = []
+        steps = [i/10 for i in range(lower, higher)]
+        for i in range(len(steps)):
+            fieldnames.append("Loss: {}".format(steps[i]))
+            fieldnames.append("Training Accuracy: {}".format(steps[i]))
+
+        writer = csv.writer(csvfile) 
+
+        writer.writerow(fieldnames) 
+
+        data = data_formating(losses, accuracies)
+        writer.writerows(data)
+    
+    
 class WeakLearner:
     def __init__(self, model, i):
         self.__class = i
