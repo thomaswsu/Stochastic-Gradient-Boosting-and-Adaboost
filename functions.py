@@ -14,7 +14,6 @@ def data_formating(losses, accuracies):
     
     return f_data
 
-
 def csv_formater(file_name, lower, higher, losses, accuracies):
     file_name = file_name + ".csv"
     with open(file_name, 'w', newline='') as csvfile:
@@ -30,6 +29,25 @@ def csv_formater(file_name, lower, higher, losses, accuracies):
 
         data = data_formating(losses, accuracies)
         writer.writerows(data)
+
+def csv_reader(file_name):
+    with open(file_name) as File:
+        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
+        rows = []
+        for row in reader:
+            rows.append(row)
+    
+    num_row = len(rows)
+    num_col = len(rows[0])
+
+    data = []
+    for i in range(num_col):
+        column = []
+        for j in range(1, num_row):
+            column.append(float(rows[j][i]))
+        data.append(column)
+        
+    return data
     
     
 class WeakLearner:
