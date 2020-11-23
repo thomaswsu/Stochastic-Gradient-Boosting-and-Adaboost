@@ -17,6 +17,9 @@ class WeakLearner:
     
     def model(self):
         return self.__model
+
+    def fit(self, X, Y):
+        self.__model.fit(X,Y)
     
     def miss_classify(self, data, eval_data):
         self.miss_data = []
