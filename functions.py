@@ -49,37 +49,128 @@ def csv_reader(file_name):
         
     return data
     
-    
-class WeakLearner:
-    def __init__(self, model, i):
-        self.__class = i
-        self.__model = model
-        self.miss_data = None
-        self.error_rate = None
-        self.y_pred = []
-    
-    def sign(self, val):
-        return 1 if val > 0 else -1
-    
-    def name(self):
-        return self.__name
-    
-    def model(self):
-        return self.__model
+from copy import deepcopy
+from time import time
 
-    def fit(self, X, Y):
-        self.__model.fit(X,Y)
+class Boost:
+    def __init__(self, n_estimators=50, learning_rate=1, random_state=None, base_learner=DecisionTreeClassifier(max_depth=2)):
+        self.n_estimators_ = n_estimators
+        self.learning_rate_ = learning_rate
+        self.random_state_ = random_state
+        self.estimators_ = []
+        self.alphas_ = np.zeros(self.n_estimators_)
+        self.accuracies = None
+        self.base_learner_ = base_learner
     
-    def miss_classify(self, data, eval_data):
-        self.miss_data = []
-        self.y_pred = self.__model.predict(data)
-        self.miss_data.extend(np.where(self.y_pred != eval_data)[0].tolist())
+    def plot(self):
+        if not self.accuracies:
+            raise ValueError("ERROR: self.accuracies not defined. Make sure self.fit() is called with visible=True")
+        plt.plot([i+1 for i in range(self.n_estimators_)],self.accuracies)
+        plt.xlabel("Number of estimators")
+        plt.ylabel("Accuracy")
+        plt.show()
+
+    def fit(self, X, Y, verbose=False, visible=False, verbose_visibility=False):
+        if visible:
+            self.accuracies = []
+            
+        start = None
+        if verbose:
+            start = time()
+
+        self.n_samples_ = X.shape[0]
+        if type(Y) is list:
+            self.classes_ = np.array(sorted(list(set(Y))))
+        else:
+            Y = np.ravel(Y)
+            self.classes_ = np.array(sorted(set(Y.tolist())))
+        self.n_classes_ = len(self.classes_)
+        for i in range(self.n_estimators_):
+            if i == 0:
+                if verbose:
+                    print(f"Iteration starting after {time()-start:.2f} seconds")
+                local_alphas = np.ones(self.n_samples_) / self.n_samples_
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_alphas, visible)
+            
+            if estimator_error is None:
+                break
+            
+            self.alphas_[i] = estimator_alpha
+            
+            if verbose and (i+1) % verbose == 0:
+                print(f"Iteration {i+1} ended after {time()-start:.2f} seconds")
+            
+            if visible:
+                acc_start = time()
+                self.accuracies.append(self.accuracy(self.predict(X),Y))
+                if verbose_visibility and (i+1) % verbose_visibility == 0:
+                    print(f"Accuracy {i+1} ({self.accuracies[-1]:.2%}) took {time()-acc_start:.2f} seconds")
+                
+            if estimator_error <= 0:
+                break
         
-    def calc_error_rate(self, w):
-        self.error_rate = np.sum(w[self.miss_data])
+        if visible:
+            self.plot()
+        
+        return self
     
-    def calc_voting_power(self):
-        self.alpha_ = 1/2*np.log((1-self.error_rate)/self.error_rate)
+    def boost(self, X, Y, weights, visible):
+        estimator = deepcopy(self.base_learner_)
+        if self.random_state_:
+            estimator.set_params(random_state=1)
+
+        estimator.fit(X, Y, sample_weight=weights)
+
+        y_hat = estimator.predict(X)
+        incorrect = y_hat != Y
+        estimator_error = np.dot(incorrect, weights) / np.sum(weights, axis=0)
+
+        if estimator_error >= 1 - 1 / self.n_classes_:
+            return None, None, None
+
+        estimator_weight = self.learning_rate_ * np.log((1 - estimator_error) / estimator_error) + np.log(self.n_classes_ - 1)
+
+        if estimator_weight <= 0:
+            return None, None, None
+
+        weights *= np.exp(estimator_weight * incorrect)
+
+        w_sum = np.sum(weights, axis=0)
+        if w_sum <= 0:
+            return None, None, None
+
+        weights /= w_sum
+
+        self.estimators_.append(estimator)
+
+        return np.array(weights), estimator_weight, estimator_error
+
+    def __predict(self, X, p):
+        return p.predict(np.array(X))
+
+    def predict(self, X):
+        n_classes = self.n_classes_
+        classes = self.classes_[:, np.newaxis]
+        trial = time()
+        predictions = np.apply_along_axis(self.__predict, np.array(self.estimators_)[:, np.newaxis], 0, X=X)
+        pred = sum((p == classes).T * a for p in e for e, a in zip(predicionts, self.alphas_))
+        print(f"Optimization took {time()-trial:.2f} seconds")
+        trial = time()
+        pred = sum((estimator.predict(X) == classes).T * a for estimator, a in zip(self.estimators_, self.alphas_))
+        print(f"Traditional took {time()-trial:.2f} seconds")
+        pred /= self.alphas_.sum()
+        if n_classes == 2:
+            pred[:, 0] *= -1
+            pred = pred.sum(axis=1)
+            return self.classes_.take(pred > 0, axis=0)
+        
+        return self.classes_.take(np.argmax(pred, axis=1), axis=0)
+    
+    def accuracy(self, y_hat, y_true):
+        ones = np.where(y_hat == y_true, 1, 0)
+        solid = np.ones((1,len(y_hat)))
+        return ((ones @ ones.T) / (solid @ solid.T))[0][0]
+
 
 class GradientDescent:
     def __init__(self):
