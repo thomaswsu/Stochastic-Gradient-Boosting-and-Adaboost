@@ -102,13 +102,13 @@ class Boost:
     def predict(self, X):
         n_classes = self.n_classes_
         classes = self.classes_[:, np.newaxis]
-        trial = time()
-        predictions = np.apply_along_axis(self.__predict, np.array(self.estimators_)[:, np.newaxis], 0, X=X)
-        pred = sum((p == classes).T * a for p in e for e, a in zip(predicionts, self.alphas_))
-        print(f"Optimization took {time()-trial:.2f} seconds")
-        trial = time()
+        # trial = time()
+        # predictions = np.apply_along_axis(self.__predict, np.array(self.estimators_)[:, np.newaxis], 0, X=X)
+        # pred = sum((p == classes).T * a for p in e for e, a in zip(predicionts, self.alphas_))
+        # print(f"Optimization took {time()-trial:.2f} seconds")
+        # trial = time()
         pred = sum((estimator.predict(X) == classes).T * a for estimator, a in zip(self.estimators_, self.alphas_))
-        print(f"Traditional took {time()-trial:.2f} seconds")
+        # print(f"Traditional took {time()-trial:.2f} seconds")
         pred /= self.alphas_.sum()
         if n_classes == 2:
             pred[:, 0] *= -1
