@@ -51,6 +51,7 @@ def csv_reader(file_name):
     
 from copy import deepcopy
 from time import time
+import matplotlib.pyplot as plt
 
 class Boost:
     def __init__(self, n_estimators=50, learning_rate=1, random_state=None, base_learner=DecisionTreeClassifier(max_depth=2)):
@@ -113,8 +114,54 @@ class Boost:
             self.plot()
         
         return self
+
+    def update_fit(self, X, Y, verbose=False):
+        start = time()
+        self.accuracies = []
+        predictions = None
+        self.n_samples_ = X.shape[0]
+        if type(Y) is list:
+            self.classes_ = np.array(sorted(list(set(Y))))
+        else:
+            Y = np.ravel(Y)
+            self.classes_ = np.array(sorted(set(Y.tolist())))
+        self.n_classes_ = len(self.classes_)
+        for i in range(self.n_estimators_):
+            if i == 0:
+                local_alphas = np.ones(self.n_samples_) / self.n_samples_
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_alphas)
+            
+            if estimator_error is None:
+                break
+            
+            if estimator_error <= 0:
+                break
+
+            acc_time = 0
+
+            if predictions is None:
+                acc_start = time()
+                predictions = (self.estimators_[-1].predict(X) == self.classes_[:, np.newaxis]).T * estimator_alpha
+                # print(f"Initial: {predictions.shape}")
+                self.accuracies.append(self.accuracy(self.reduce_prediction(predictions), Y))
+                acc_time = time()-acc_start
+                # print(f"Post accuracy: {predictions.shape}")
+
+            else:
+                acc_start = time()
+                predictions = self.update_prediction(predictions, X, self.estimators_[-1], estimator_alpha)
+                self.accuracies.append(self.accuracy(self.reduce_prediction(predictions), Y))
+                acc_time = time()-acc_start
+
+            self.alphas_[i] = estimator_alpha
+            
+            if verbose and (i+1) % verbose == 0:
+                print(f"Accuracy {i+1} ({self.accuracies[-1]:.2%} in {acc_time:.2f} seconds) after {time()-start:.2f} seconds")
+        
+        self.plot()
+        return self
     
-    def boost(self, X, Y, weights, visible):
+    def boost(self, X, Y, weights, visible=False):
         estimator = deepcopy(self.base_learner_)
         if self.random_state_:
             estimator.set_params(random_state=1)
@@ -147,6 +194,29 @@ class Boost:
 
     def __predict(self, X, p):
         return p.predict(np.array(X))
+
+    def update_prediction(self, p, X, t, a):
+        n_classes = self.n_classes_
+        classes = self.classes_[:, np.newaxis]
+        pred = (t.predict(X) == classes).T * a
+        # print(pred[0])
+        # print(pred[1])
+        # print(pred[2])
+        # print(pred[3])
+        # print(p.shape)
+        p = (p*self.alphas_.sum())
+        # print(p.shape, pred.shape)
+        p += pred
+        p /= (self.alphas_.sum() + a)
+        if n_classes == 2:
+            p[:, 0] *= -1
+            p = p.sum(axis=1)
+            return self.classes_.take(p > 0, axis=0)
+        
+        return p
+
+    def reduce_prediction(self, p):
+        return self.classes_.take(np.argmax(p, axis=1), axis=0)
 
     def predict(self, X):
         n_classes = self.n_classes_
