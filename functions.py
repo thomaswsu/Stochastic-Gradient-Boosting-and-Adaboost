@@ -61,19 +61,25 @@ class Boost:
         self.estimators_ = []
         self.alphas_ = np.zeros(self.n_estimators_)
         self.accuracies = None
+        self.losses = None
         self.base_learner_ = base_learner
     
     def plot(self):
-        if not self.accuracies:
-            raise ValueError("ERROR: self.accuracies not defined. Make sure self.fit() is called with visible=True")
-        plt.plot([i+1 for i in range(self.n_estimators_)],self.accuracies)
+        if not self.accuracies or not self.losses:
+            raise ValueError("ERROR: self.accuracies or self.losses not defined. Make sure self.fit() is called with visible=True or that you called self.update_fit()")
+        plt.plot([i+1 for i in range(len(self.accuracies))],self.accuracies)
         plt.xlabel("Number of estimators")
         plt.ylabel("Accuracy")
         plt.show()
+        plt.plot([i+1 for i in range(len(self.losses))], self.losses)
+        plt.xlabel("Number of estimators")
+        plt.ylabel("Loss")
+        plt.show()
 
-    def fit(self, X, Y, verbose=False, visible=False, verbose_visibility=False):
-        if visible:
-            self.accuracies = []
+
+    def fit(self, X, Y, verbose=False, batch_size = None):
+        if not batch_size:
+            batch_size = len(X)
             
         start = None
         if verbose:
@@ -87,11 +93,14 @@ class Boost:
             self.classes_ = np.array(sorted(set(Y.tolist())))
         self.n_classes_ = len(self.classes_)
         for i in range(self.n_estimators_):
+            indices = np.arange(len(X))
+            np.random.shuffle(indices)
+            indices = indices[:batch_size]
             if i == 0:
                 if verbose:
                     print(f"Iteration starting after {time()-start:.2f} seconds")
-                local_alphas = np.ones(self.n_samples_) / self.n_samples_
-            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_alphas, visible)
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices, visible)
             
             if estimator_error is None:
                 break
@@ -100,24 +109,15 @@ class Boost:
             
             if verbose and (i+1) % verbose == 0:
                 print(f"Iteration {i+1} ended after {time()-start:.2f} seconds")
-            
-            if visible:
-                acc_start = time()
-                self.accuracies.append(self.accuracy(self.predict(X),Y))
-                if verbose_visibility and (i+1) % verbose_visibility == 0:
-                    print(f"Accuracy {i+1} ({self.accuracies[-1]:.2%}) took {time()-acc_start:.2f} seconds")
-                
-            if estimator_error <= 0:
-                break
-        
-        if visible:
-            self.plot()
         
         return self
 
-    def update_fit(self, X, Y, verbose=False):
+    def update_fit(self, X, Y, verbose=False, batch_size=None):
+        if not batch_size:
+            batch_size = len(X)
         start = time()
         self.accuracies = []
+        self.losses = []
         predictions = None
         self.n_samples_ = X.shape[0]
         if type(Y) is list:
@@ -126,58 +126,81 @@ class Boost:
             Y = np.ravel(Y)
             self.classes_ = np.array(sorted(set(Y.tolist())))
         self.n_classes_ = len(self.classes_)
-        for i in range(self.n_estimators_):
+        indices = np.arange(len(X))
+        np.random.shuffle(indices)
+        tracked_items = 0
+        i = 0
+        while i < self.n_estimators_:
+            tracked_items += 600
+            if tracked_items >= len(X):
+                tracked_items = 0
+                print("Reshuffling...")
+                indices = np.arange(len(X))
+                np.random.shuffle(indices)
+            indices = indices[:batch_size]
             if i == 0:
-                local_alphas = np.ones(self.n_samples_) / self.n_samples_
-            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_alphas)
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices)
             
             if estimator_error is None:
-                break
+                print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
+                # break
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+                continue
             
             if estimator_error <= 0:
-                break
+                print(f"WARNING: Estimator error of 0 after {tracked_items}/{len(X)} data points")
+                # break
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+                continue
 
             acc_time = 0
 
             if predictions is None:
                 acc_start = time()
                 predictions = (self.estimators_[-1].predict(X) == self.classes_[:, np.newaxis]).T * estimator_alpha
-                # print(f"Initial: {predictions.shape}")
-                self.accuracies.append(self.accuracy(self.reduce_prediction(predictions), Y))
+                collapsed = self.reduce_prediction(predictions)
+                self.accuracies.append(self.accuracy(collapsed, Y))
+                self.losses.append(self.loss(Y, predictions, self.n_classes_))
                 acc_time = time()-acc_start
-                # print(f"Post accuracy: {predictions.shape}")
 
             else:
                 acc_start = time()
                 predictions = self.update_prediction(predictions, X, self.estimators_[-1], estimator_alpha)
-                self.accuracies.append(self.accuracy(self.reduce_prediction(predictions), Y))
+                collapsed = self.reduce_prediction(predictions)
+                self.accuracies.append(self.accuracy(collapsed, Y))
+                self.losses.append(self.loss(Y, predictions, self.n_classes_))
                 acc_time = time()-acc_start
 
             self.alphas_[i] = estimator_alpha
             
             if verbose and (i+1) % verbose == 0:
-                print(f"Accuracy {i+1} ({self.accuracies[-1]:.2%} in {acc_time:.2f} seconds) after {time()-start:.2f} seconds")
-        
+                print(f"Accuracy/Loss {i+1} ({self.accuracies[-1]:.2%}/{self.losses[-1]:.3f} in {acc_time:.2f} seconds) after {time()-start:.2f} seconds")
+
+            i += 1
+
         self.plot()
         return self
     
-    def boost(self, X, Y, weights, visible=False):
+    def boost(self, X, Y, weights, indices, visible=False):
         estimator = deepcopy(self.base_learner_)
         if self.random_state_:
             estimator.set_params(random_state=1)
 
-        estimator.fit(X, Y, sample_weight=weights)
+        estimator.fit(X[indices], Y[indices], sample_weight=weights[indices])
 
         y_hat = estimator.predict(X)
         incorrect = y_hat != Y
         estimator_error = np.dot(incorrect, weights) / np.sum(weights, axis=0)
 
         if estimator_error >= 1 - 1 / self.n_classes_:
-            return None, None, None
+            print(f"WARNING: estimator_error {estimator_error} >= {1 - 1 / self.n_classes_}")
+        #     return None, None, None
 
         estimator_weight = self.learning_rate_ * np.log((1 - estimator_error) / estimator_error) + np.log(self.n_classes_ - 1)
 
         if estimator_weight <= 0:
+            print(f"WARNING: estimator_weight {estimator_weight} <= 0")
             return None, None, None
 
         weights *= np.exp(estimator_weight * incorrect)
@@ -199,13 +222,7 @@ class Boost:
         n_classes = self.n_classes_
         classes = self.classes_[:, np.newaxis]
         pred = (t.predict(X) == classes).T * a
-        # print(pred[0])
-        # print(pred[1])
-        # print(pred[2])
-        # print(pred[3])
-        # print(p.shape)
         p = (p*self.alphas_.sum())
-        # print(p.shape, pred.shape)
         p += pred
         p /= (self.alphas_.sum() + a)
         if n_classes == 2:
@@ -221,13 +238,7 @@ class Boost:
     def predict(self, X):
         n_classes = self.n_classes_
         classes = self.classes_[:, np.newaxis]
-        # trial = time()
-        # predictions = np.apply_along_axis(self.__predict, np.array(self.estimators_)[:, np.newaxis], 0, X=X)
-        # pred = sum((p == classes).T * a for p in e for e, a in zip(predicionts, self.alphas_))
-        # print(f"Optimization took {time()-trial:.2f} seconds")
-        # trial = time()
         pred = sum((estimator.predict(X) == classes).T * a for estimator, a in zip(self.estimators_, self.alphas_))
-        # print(f"Traditional took {time()-trial:.2f} seconds")
         pred /= self.alphas_.sum()
         if n_classes == 2:
             pred[:, 0] *= -1
@@ -236,6 +247,16 @@ class Boost:
         
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)
     
+    def loss(self, Y, f, K=False):
+        if not K:
+            K = self.n_classes_
+        y = np.ones(shape=f.shape) * (-1/(K-1))
+        for i in range(f.shape[0]):
+            if np.argmax(f[i]) == Y[i]:
+                y[i][Y[i]] = 1
+
+        return np.sum([np.exp((-1/K) * (y[:i].T @ f[:i])) for i in range(f.shape[1])])
+
     def accuracy(self, y_hat, y_true):
         ones = np.where(y_hat == y_true, 1, 0)
         solid = np.ones((1,len(y_hat)))
