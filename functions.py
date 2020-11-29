@@ -14,7 +14,7 @@ class Boost:
         self.accuracies = None
         self.losses = None
         self.base_learner_ = base_learner
-    
+
     def plot(self):
         if not self.accuracies or not self.losses:
             raise ValueError("ERROR: self.accuracies or self.losses not defined. Make sure self.fit() is called with visible=True or that you called self.update_fit()")
@@ -291,6 +291,56 @@ class GradientDescent:
                 total += 1
         return total/X.shape[0]
 
+
+import csv
+
+def data_formating(losses, accuracies):
+    f_data = []
+    
+    for i in range(len(losses[0])):
+        row = []
+        for j in range(len(losses)):
+            row.append(losses[j][i])
+            row.append(accuracies[j][i])
+        f_data.append(row)
+    
+    return f_data
+
+def csv_formater(file_name, lower, higher, losses, accuracies):
+    file_name = file_name + ".csv"
+    with open(file_name, 'w', newline='') as csvfile:
+        fieldnames = []
+        steps = [i/10 for i in range(lower, higher)]
+        for i in range(len(steps)):
+            fieldnames.append("Loss: {}".format(steps[i]))
+            fieldnames.append("Training Accuracy: {}".format(steps[i]))
+
+        writer = csv.writer(csvfile) 
+
+        writer.writerow(fieldnames) 
+
+        data = data_formating(losses, accuracies)
+        writer.writerows(data)
+
+def csv_reader(file_name):
+    with open(file_name) as File:
+        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
+        rows = []
+        for row in reader:
+            rows.append(row)
+    
+    num_row = len(rows)
+    num_col = len(rows[0])
+
+    data = []
+    for i in range(num_col):
+        column = []
+        for j in range(1, num_row):
+            column.append(float(rows[j][i]))
+        data.append(column)
+        
+    return data
+      
 def ShallowTree(d = 2):
     return DecisionTreeClassifier(max_depth=d)
 
