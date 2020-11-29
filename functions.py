@@ -149,7 +149,8 @@ class Boost:
             tracked_items += 600
             if tracked_items >= len(X):
                 tracked_items = 0
-                print("Reshuffling...")
+                # if verbose:
+                    # print("Reshuffling...")
                 indices = np.arange(len(X))
                 np.random.shuffle(indices)
             indices = indices[:batch_size]
