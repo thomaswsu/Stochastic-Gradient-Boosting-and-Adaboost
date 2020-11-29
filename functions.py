@@ -1,82 +1,218 @@
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
-import csv
+from copy import deepcopy
+from time import time
+import matplotlib.pyplot as plt
 
-def data_formating(losses, accuracies):
-    f_data = []
-    
-    for i in range(len(losses[0])):
-        row = []
-        for j in range(len(losses)):
-            row.append(losses[j][i])
-            row.append(accuracies[j][i])
-        f_data.append(row)
-    
-    return f_data
+class Boost:
+    def __init__(self, n_estimators=50, learning_rate=1, random_state=None, base_learner=DecisionTreeClassifier(max_depth=2)):
+        self.n_estimators_ = n_estimators
+        self.learning_rate_ = learning_rate
+        self.random_state_ = random_state
+        self.estimators_ = []
+        self.alphas_ = np.zeros(self.n_estimators_)
+        self.accuracies = None
+        self.losses = None
+        self.base_learner_ = base_learner
 
-def csv_formater(file_name, lower, higher, losses, accuracies):
-    file_name = file_name + ".csv"
-    with open(file_name, 'w', newline='') as csvfile:
-        fieldnames = []
-        steps = [i/10 for i in range(lower, higher)]
-        for i in range(len(steps)):
-            fieldnames.append("Loss: {}".format(steps[i]))
-            fieldnames.append("Training Accuracy: {}".format(steps[i]))
+    def plot(self):
+        if not self.accuracies or not self.losses:
+            raise ValueError("ERROR: self.accuracies or self.losses not defined. Make sure self.fit() is called with visible=True or that you called self.update_fit()")
+        plt.plot([i+1 for i in range(len(self.accuracies))],self.accuracies)
+        plt.xlabel("Number of estimators")
+        plt.ylabel("Accuracy")
+        plt.show()
+        plt.plot([i+1 for i in range(len(self.losses))], self.losses)
+        plt.xlabel("Number of estimators")
+        plt.ylabel("Loss")
+        plt.show()
 
-        writer = csv.writer(csvfile) 
 
-        writer.writerow(fieldnames) 
+    def fit(self, X, Y, verbose=False, batch_size = None):
+        if not batch_size:
+            batch_size = len(X)
+            
+        start = None
+        if verbose:
+            start = time()
 
-        data = data_formating(losses, accuracies)
-        writer.writerows(data)
-
-def csv_reader(file_name):
-    with open(file_name) as File:
-        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
-        rows = []
-        for row in reader:
-            rows.append(row)
-    
-    num_row = len(rows)
-    num_col = len(rows[0])
-
-    data = []
-    for i in range(num_col):
-        column = []
-        for j in range(1, num_row):
-            column.append(float(rows[j][i]))
-        data.append(column)
+        self.n_samples_ = X.shape[0]
+        if type(Y) is list:
+            self.classes_ = np.array(sorted(list(set(Y))))
+        else:
+            Y = np.ravel(Y)
+            self.classes_ = np.array(sorted(set(Y.tolist())))
+        self.n_classes_ = len(self.classes_)
+        for i in range(self.n_estimators_):
+            indices = np.arange(len(X))
+            np.random.shuffle(indices)
+            indices = indices[:batch_size]
+            if i == 0:
+                if verbose:
+                    print(f"Iteration starting after {time()-start:.2f} seconds")
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices, visible)
+            
+            if estimator_error is None:
+                break
+            
+            self.alphas_[i] = estimator_alpha
+            
+            if verbose and (i+1) % verbose == 0:
+                print(f"Iteration {i+1} ended after {time()-start:.2f} seconds")
         
-    return data
+        return self
+
+    def update_fit(self, X, Y, verbose=False, batch_size=None):
+        if not batch_size:
+            batch_size = len(X)
+        start = time()
+        self.accuracies = []
+        self.losses = []
+        predictions = None
+        self.n_samples_ = X.shape[0]
+        if type(Y) is list:
+            self.classes_ = np.array(sorted(list(set(Y))))
+        else:
+            Y = np.ravel(Y)
+            self.classes_ = np.array(sorted(set(Y.tolist())))
+        self.n_classes_ = len(self.classes_)
+        indices = np.arange(len(X))
+        np.random.shuffle(indices)
+        tracked_items = 0
+        i = 0
+        while i < self.n_estimators_:
+            tracked_items += 600
+            if tracked_items >= len(X):
+                tracked_items = 0
+                print("Reshuffling...")
+                indices = np.arange(len(X))
+                np.random.shuffle(indices)
+            indices = indices[:batch_size]
+            if i == 0:
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices)
+            
+            if estimator_error is None:
+                print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
+                # break
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+                continue
+            
+            if estimator_error <= 0:
+                print(f"WARNING: Estimator error of 0 after {tracked_items}/{len(X)} data points")
+                # break
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+                continue
+
+            acc_time = 0
+
+            if predictions is None:
+                acc_start = time()
+                predictions = (self.estimators_[-1].predict(X) == self.classes_[:, np.newaxis]).T * estimator_alpha
+                collapsed = self.reduce_prediction(predictions)
+                self.accuracies.append(self.accuracy(collapsed, Y))
+                self.losses.append(self.loss(Y, predictions, self.n_classes_))
+                acc_time = time()-acc_start
+
+            else:
+                acc_start = time()
+                predictions = self.update_prediction(predictions, X, self.estimators_[-1], estimator_alpha)
+                collapsed = self.reduce_prediction(predictions)
+                self.accuracies.append(self.accuracy(collapsed, Y))
+                self.losses.append(self.loss(Y, predictions, self.n_classes_))
+                acc_time = time()-acc_start
+
+            self.alphas_[i] = estimator_alpha
+            
+            if verbose and (i+1) % verbose == 0:
+                print(f"Accuracy/Loss {i+1} ({self.accuracies[-1]:.2%}/{self.losses[-1]:.3f} in {acc_time:.2f} seconds) after {time()-start:.2f} seconds")
+
+            i += 1
+
+        self.plot()
+        return self
     
-    
-class WeakLearner:
-    def __init__(self, model, i):
-        self.__class = i
-        self.__model = model
-        self.miss_data = None
-        self.error_rate = None
-        self.y_pred = []
-    
-    def sign(self, val):
-        return 1 if val > 0 else -1
-    
-    def name(self):
-        return self.__name
-    
-    def model(self):
-        return self.__model
-    
-    def miss_classify(self, data, eval_data):
-        self.miss_data = []
-        self.y_pred = self.__model.predict(data)
-        self.miss_data.extend(np.where(self.y_pred != eval_data)[0].tolist())
+    def boost(self, X, Y, weights, indices, visible=False):
+        estimator = deepcopy(self.base_learner_)
+        if self.random_state_:
+            estimator.set_params(random_state=1)
+
+        estimator.fit(X[indices], Y[indices], sample_weight=weights[indices])
+
+        y_hat = estimator.predict(X)
+        incorrect = y_hat != Y
+        estimator_error = np.dot(incorrect, weights) / np.sum(weights, axis=0)
+
+        if estimator_error >= 1 - 1 / self.n_classes_:
+            print(f"WARNING: estimator_error {estimator_error} >= {1 - 1 / self.n_classes_}")
+        #     return None, None, None
+
+        estimator_weight = self.learning_rate_ * np.log((1 - estimator_error) / estimator_error) + np.log(self.n_classes_ - 1)
+
+        if estimator_weight <= 0:
+            print(f"WARNING: estimator_weight {estimator_weight} <= 0")
+            return None, None, None
+
+        weights *= np.exp(estimator_weight * incorrect)
+
+        w_sum = np.sum(weights, axis=0)
+        if w_sum <= 0:
+            return None, None, None
+
+        weights /= w_sum
+
+        self.estimators_.append(estimator)
+
+        return np.array(weights), estimator_weight, estimator_error
+
+    def __predict(self, X, p):
+        return p.predict(np.array(X))
+
+    def update_prediction(self, p, X, t, a):
+        n_classes = self.n_classes_
+        classes = self.classes_[:, np.newaxis]
+        pred = (t.predict(X) == classes).T * a
+        p = (p*self.alphas_.sum())
+        p += pred
+        p /= (self.alphas_.sum() + a)
+        if n_classes == 2:
+            p[:, 0] *= -1
+            p = p.sum(axis=1)
+            return self.classes_.take(p > 0, axis=0)
         
-    def calc_error_rate(self, w):
-        self.error_rate = np.sum(w[self.miss_data])
+        return p
+
+    def reduce_prediction(self, p):
+        return self.classes_.take(np.argmax(p, axis=1), axis=0)
+
+    def predict(self, X):
+        n_classes = self.n_classes_
+        classes = self.classes_[:, np.newaxis]
+        pred = sum((estimator.predict(X) == classes).T * a for estimator, a in zip(self.estimators_, self.alphas_))
+        pred /= self.alphas_.sum()
+        if n_classes == 2:
+            pred[:, 0] *= -1
+            pred = pred.sum(axis=1)
+            return self.classes_.take(pred > 0, axis=0)
+        
+        return self.classes_.take(np.argmax(pred, axis=1), axis=0)
     
-    def calc_voting_power(self):
-        self.alpha_ = 1/2*np.log((1-self.error_rate)/self.error_rate)
+    def loss(self, Y, f, K=False):
+        if not K:
+            K = self.n_classes_
+        y = np.ones(shape=f.shape) * (-1/(K-1))
+        for i in range(f.shape[0]):
+            if np.argmax(f[i]) == Y[i]:
+                y[i][Y[i]] = 1
+
+        return np.sum([np.exp((-1/K) * (y[:i].T @ f[:i])) for i in range(f.shape[1])])
+
+    def accuracy(self, y_hat, y_true):
+        ones = np.where(y_hat == y_true, 1, 0)
+        solid = np.ones((1,len(y_hat)))
+        return ((ones @ ones.T) / (solid @ solid.T))[0][0]
+
 
 class GradientDescent:
     def __init__(self):
@@ -155,6 +291,56 @@ class GradientDescent:
                 total += 1
         return total/X.shape[0]
 
+
+import csv
+
+def data_formating(losses, accuracies):
+    f_data = []
+    
+    for i in range(len(losses[0])):
+        row = []
+        for j in range(len(losses)):
+            row.append(losses[j][i])
+            row.append(accuracies[j][i])
+        f_data.append(row)
+    
+    return f_data
+
+def csv_formater(file_name, lower, higher, losses, accuracies):
+    file_name = file_name + ".csv"
+    with open(file_name, 'w', newline='') as csvfile:
+        fieldnames = []
+        steps = [i/10 for i in range(lower, higher)]
+        for i in range(len(steps)):
+            fieldnames.append("Loss: {}".format(steps[i]))
+            fieldnames.append("Training Accuracy: {}".format(steps[i]))
+
+        writer = csv.writer(csvfile) 
+
+        writer.writerow(fieldnames) 
+
+        data = data_formating(losses, accuracies)
+        writer.writerows(data)
+
+def csv_reader(file_name):
+    with open(file_name) as File:
+        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
+        rows = []
+        for row in reader:
+            rows.append(row)
+    
+    num_row = len(rows)
+    num_col = len(rows[0])
+
+    data = []
+    for i in range(num_col):
+        column = []
+        for j in range(1, num_row):
+            column.append(float(rows[j][i]))
+        data.append(column)
+        
+    return data
+      
 def ShallowTree(d = 2):
     return DecisionTreeClassifier(max_depth=d)
 
