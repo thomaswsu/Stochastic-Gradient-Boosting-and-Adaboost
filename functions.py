@@ -48,21 +48,6 @@ def csv_reader(file_name):
         data.append(column)
         
     return data
-    
-from copy import deepcopy
-from time import time
-import matplotlib.pyplot as plt
-
-class Boost:
-    def __init__(self, n_estimators=50, learning_rate=1, random_state=None, base_learner=DecisionTreeClassifier(max_depth=2)):
-        self.n_estimators_ = n_estimators
-        self.learning_rate_ = learning_rate
-        self.random_state_ = random_state
-        self.estimators_ = []
-        self.alphas_ = np.zeros(self.n_estimators_)
-        self.accuracies = None
-        self.losses = None
-        self.base_learner_ = base_learner
 
 from copy import deepcopy
 from time import time
@@ -245,21 +230,6 @@ class Boost:
             p[:, 0] *= -1
             p = p.sum(axis=1)
             return self.classes_.take(p > 0, axis=0)
-        
-        return p
-
-    def reduce_prediction(self, p):
-        return self.classes_.take(np.argmax(p, axis=1), axis=0)
-
-    def predict(self, X):
-        n_classes = self.n_classes_
-        classes = self.classes_[:, np.newaxis]
-        pred = sum((estimator.predict(X) == classes).T * a for estimator, a in zip(self.estimators_, self.alphas_))
-        pred /= self.alphas_.sum()
-        if n_classes == 2:
-            pred[:, 0] *= -1
-            pred = pred.sum(axis=1)
-            return self.classes_.take(pred > 0, axis=0)
         
         return p
 
