@@ -1,5 +1,54 @@
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
+import csv
+
+def data_formating(losses, accuracies):
+    f_data = []
+    
+    for i in range(len(losses[0])):
+        row = []
+        for j in range(len(losses)):
+            row.append(losses[j][i])
+            row.append(accuracies[j][i])
+        f_data.append(row)
+    
+    return f_data
+
+def csv_formater(file_name, lower, higher, losses, accuracies):
+    file_name = file_name + ".csv"
+    with open(file_name, 'w', newline='') as csvfile:
+        fieldnames = []
+        steps = [i/10 for i in range(lower, higher)]
+        for i in range(len(steps)):
+            fieldnames.append("Loss: {}".format(steps[i]))
+            fieldnames.append("Training Accuracy: {}".format(steps[i]))
+
+        writer = csv.writer(csvfile) 
+
+        writer.writerow(fieldnames) 
+
+        data = data_formating(losses, accuracies)
+        writer.writerows(data)
+
+def csv_reader(file_name):
+    with open(file_name) as File:
+        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
+        rows = []
+        for row in reader:
+            rows.append(row)
+    
+    num_row = len(rows)
+    num_col = len(rows[0])
+
+    data = []
+    for i in range(num_col):
+        column = []
+        for j in range(1, num_row):
+            column.append(float(rows[j][i]))
+        data.append(column)
+        
+    return data
+
 from copy import deepcopy
 from time import time
 import matplotlib.pyplot as plt
@@ -85,7 +134,8 @@ class Boost:
             tracked_items += 600
             if tracked_items >= len(X):
                 tracked_items = 0
-                print("Reshuffling...")
+                # if verbose:
+                    # print("Reshuffling...")
                 indices = np.arange(len(X))
                 np.random.shuffle(indices)
             indices = indices[:batch_size]
@@ -94,13 +144,13 @@ class Boost:
             local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices)
             
             if estimator_error is None:
-                print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
+                # print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
                 # break
                 local_weights = np.ones(self.n_samples_) / self.n_samples_
                 continue
             
             if estimator_error <= 0:
-                print(f"WARNING: Estimator error of 0 after {tracked_items}/{len(X)} data points")
+                # print(f"WARNING: Estimator error of 0 after {tracked_items}/{len(X)} data points")
                 # break
                 local_weights = np.ones(self.n_samples_) / self.n_samples_
                 continue
@@ -145,13 +195,13 @@ class Boost:
         estimator_error = np.dot(incorrect, weights) / np.sum(weights, axis=0)
 
         if estimator_error >= 1 - 1 / self.n_classes_:
-            print(f"WARNING: estimator_error {estimator_error} >= {1 - 1 / self.n_classes_}")
-        #     return None, None, None
+            # print(f"WARNING: estimator_error {estimator_error} >= {1 - 1 / self.n_classes_}")
+            return None, None, None
 
         estimator_weight = self.learning_rate_ * np.log((1 - estimator_error) / estimator_error) + np.log(self.n_classes_ - 1)
 
         if estimator_weight <= 0:
-            print(f"WARNING: estimator_weight {estimator_weight} <= 0")
+            # print(f"WARNING: estimator_weight {estimator_weight} <= 0")
             return None, None, None
 
         weights *= np.exp(estimator_weight * incorrect)
@@ -195,7 +245,7 @@ class Boost:
             pred[:, 0] *= -1
             pred = pred.sum(axis=1)
             return self.classes_.take(pred > 0, axis=0)
-        
+
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)
     
     def loss(self, Y, f, K=False):
@@ -290,76 +340,6 @@ class GradientDescent:
             if (y[i]==0 and np.dot(weight,X[i])==0) or (y[i]*np.dot(weight,X[i]) > 0):
                 total += 1
         return total/X.shape[0]
-
-
-import csv
-
-def data_formating(losses, accuracies):
-    f_data = []
-    
-    for i in range(len(losses[0])):
-        row = []
-        for j in range(len(losses)):
-            row.append(losses[j][i])
-            row.append(accuracies[j][i])
-        f_data.append(row)
-    
-    return f_data
-
-def csv_formater(file_name, lower, higher, losses, accuracies):
-    file_name = file_name + ".csv"
-    with open(file_name, 'w', newline='') as csvfile:
-        fieldnames = []
-        steps = [i/10 for i in range(lower, higher)]
-        for i in range(len(steps)):
-            fieldnames.append("Loss: {}".format(steps[i]))
-            fieldnames.append("Training Accuracy: {}".format(steps[i]))
-
-        writer = csv.writer(csvfile) 
-
-        writer.writerow(fieldnames) 
-
-        data = data_formating(losses, accuracies)
-        writer.writerows(data)
-
-def csv_reader(file_name):
-    with open(file_name) as File:
-        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
-        rows = []
-        for row in reader:
-            rows.append(row)
-    
-    num_row = len(rows)
-    num_col = len(rows[0])
-
-    data = []
-    for i in range(num_col):
-        column = []
-        for j in range(1, num_row):
-            column.append(float(rows[j][i]))
-        data.append(column)
-        
-    return data
       
 def ShallowTree(d = 2):
     return DecisionTreeClassifier(max_depth=d)
-
-def classify(data, classification):
-    return [1 if np.where(d == 1)[0][0] == classification else -1 for d in data]
-
-# Voting: returns +1 or -1
-def eval_P(P, eval_set, h):
-    return [1 if h.sign(P[i]) == h.sign(eval_set[i]) else -1 for i in range(len(P))]
-
-def H_accuracy(H, data, eval_set):
-    c = []
-    for h in H:
-        results = eval_P(h.model().predict(data), eval_set, h)
-        if not c:
-            c.extend(results)
-        else:
-            for i in range(len(results)):
-                c[i] += results[i]
-    for i in range(len(c)):
-        c[i] = c[i] / len(H)
-    return sum(c)/len(c)
