@@ -1,59 +1,21 @@
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
-import csv
-
-def data_formating(losses, accuracies):
-    f_data = []
-    
-    for i in range(len(losses[0])):
-        row = []
-        for j in range(len(losses)):
-            row.append(losses[j][i])
-            row.append(accuracies[j][i])
-        f_data.append(row)
-    
-    return f_data
-
-def csv_formater(file_name, lower, higher, losses, accuracies):
-    file_name = file_name + ".csv"
-    with open(file_name, 'w', newline='') as csvfile:
-        fieldnames = []
-        steps = [i/10 for i in range(lower, higher)]
-        for i in range(len(steps)):
-            fieldnames.append("Loss: {}".format(steps[i]))
-            fieldnames.append("Training Accuracy: {}".format(steps[i]))
-
-        writer = csv.writer(csvfile) 
-
-        writer.writerow(fieldnames) 
-
-        data = data_formating(losses, accuracies)
-        writer.writerows(data)
-
-def csv_reader(file_name):
-    with open(file_name) as File:
-        reader = csv.reader(File, delimiter=',', quotechar=',', quoting=csv.QUOTE_MINIMAL)
-        rows = []
-        for row in reader:
-            rows.append(row)
-    
-    num_row = len(rows)
-    num_col = len(rows[0])
-
-    data = []
-    for i in range(num_col):
-        column = []
-        for j in range(1, num_row):
-            column.append(float(rows[j][i]))
-        data.append(column)
-        
-    return data
-
 from copy import deepcopy
 from time import time
 import matplotlib.pyplot as plt
 
 class Boost:
+"""
+:param n_estimators: number of Weak Learners to be predicted over. Default=50
+:type n_estimators: int > 0
+:param learning_rate: Weight applied to gradients. Default=1
+:type learning_rate: float
+:param random_state: Random seed for replicating results. Default=None
+:type random_state: int
+:param base_learner: The Weak Learner type to be used and duplicated. Default=DecisionTreeClassifier(max_depth=2)
+:type base_learner: sklearn Classifier object
+"""
+
     def __init__(self, n_estimators=50, learning_rate=1, random_state=None, base_learner=DecisionTreeClassifier(max_depth=2)):
         self.n_estimators_ = n_estimators
         self.learning_rate_ = learning_rate
@@ -64,7 +26,12 @@ class Boost:
         self.losses = None
         self.base_learner_ = base_learner
 
-    def plot(self):
+    def __plot(self):
+        """
+        Plot the accuracies and losses from an update_fit call
+        :return: None
+        """
+
         if not self.accuracies or not self.losses:
             raise ValueError("ERROR: self.accuracies or self.losses not defined. Make sure self.fit() is called with visible=True or that you called self.update_fit()")
         plt.plot([i+1 for i in range(len(self.accuracies))],self.accuracies)
@@ -77,7 +44,26 @@ class Boost:
         plt.show()
 
 
-    def fit(self, X, Y, verbose=False, batch_size = None):
+    def fit(self, X, Y, verbose=False, batch_size=None):
+        """
+        :param X: X_data to be trained over
+        :type X: np.array[np.array[float]]
+        :param Y: Y_data to evaluate predictions
+        :type Y: np.array[int]
+        :param verbose: Controls how often updates are printed. Default=False
+        :type verbose: int such that verbose > 0
+        :param batch_size: Controls the size of minibatches. Default=None
+        :type batch_size: int such that len(X) > batch_size > 0
+        :raises: ValueError if invalid verbose value or batch_size is passed
+        :return: updated model (self)
+        :rtype: class<Boost>
+        """
+
+        if verbose and verbose < 1 or type(verbose) is not int:
+            raise ValueError(f"ERROR: verbose value {verbose} is invalid")
+        if batch_size and batch_size > len(X) or batch_size < 1 or type(batch_size) is not int:
+            raise ValueError(f"ERROR: batch_size value {batch_size} is invalid")
+
         if not batch_size:
             batch_size = len(X)
             
@@ -100,10 +86,13 @@ class Boost:
                 if verbose:
                     print(f"Iteration starting after {time()-start:.2f} seconds")
                 local_weights = np.ones(self.n_samples_) / self.n_samples_
-            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices, visible)
+            local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices)
             
             if estimator_error is None:
-                break
+                if verbose:
+                    print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
+                local_weights = np.ones(self.n_samples_) / self.n_samples_
+                continue
             
             self.alphas_[i] = estimator_alpha
             
@@ -113,6 +102,26 @@ class Boost:
         return self
 
     def update_fit(self, X, Y, verbose=False, batch_size=None):
+        """
+        Similar behavior to Boost().fit(), but tracks and plots losses and accuracies with every iteration
+        :param X: X_data to be trained over
+        :type X: np.array[np.array[float]]
+        :param Y: Y_data to evaluate predictions
+        :type Y: np.array[int]
+        :param verbose: Controls how often updates are printed. Default=False
+        :type verbose: int such that verbose > 0
+        :param batch_size: Controls the size of minibatches. Default=None
+        :type batch_size: int such that len(X) > batch_size > 0
+        :raises: ValueError if invalid verbose value or batch_size is passed
+        :return: updated model (self)
+        :rtype: class<Boost>
+        """
+
+        if verbose and verbose < 1 or type(verbose) is not int:
+            raise ValueError(f"ERROR: verbose value {verbose} is invalid")
+        if batch_size and batch_size > len(X) or batch_size < 1 or type(batch_size) is not int:
+            raise ValueError(f"ERROR: batch_size value {batch_size} is invalid")    
+
         if not batch_size:
             batch_size = len(X)
         start = time()
@@ -134,8 +143,6 @@ class Boost:
             tracked_items += 600
             if tracked_items >= len(X):
                 tracked_items = 0
-                # if verbose:
-                    # print("Reshuffling...")
                 indices = np.arange(len(X))
                 np.random.shuffle(indices)
             indices = indices[:batch_size]
@@ -144,14 +151,8 @@ class Boost:
             local_weights, estimator_alpha, estimator_error = self.boost(X, Y, local_weights, indices)
             
             if estimator_error is None:
-                # print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
-                # break
-                local_weights = np.ones(self.n_samples_) / self.n_samples_
-                continue
-            
-            if estimator_error <= 0:
-                # print(f"WARNING: Estimator error of 0 after {tracked_items}/{len(X)} data points")
-                # break
+                if verbose:
+                    print(f"WARNING: No estimator error after {tracked_items}/{len(X)} data points")
                 local_weights = np.ones(self.n_samples_) / self.n_samples_
                 continue
 
@@ -180,10 +181,24 @@ class Boost:
 
             i += 1
 
-        self.plot()
+        self.__plot()
         return self
     
-    def boost(self, X, Y, weights, indices, visible=False):
+    def boost(self, X, Y, weights, indices):
+        """
+        Boosts on given data
+        :param X: X_data to be trained over
+        :type X: np.array[np.array[float]]
+        :param Y: Y_data to evaluate predictions
+        :type Y: np.array[np.array[float]]
+        :param weights: Weights used to select data points
+        :type weights: List[float]
+        :param indices: Indices from minibatch set
+        :type indices: np.array[int]
+        :return: new data weights, alpha for the new estimator, error for the new estimator
+        :rytpe: np.array[float], float, float
+        """
+
         estimator = deepcopy(self.base_learner_)
         if self.random_state_:
             estimator.set_params(random_state=1)
@@ -195,13 +210,11 @@ class Boost:
         estimator_error = np.dot(incorrect, weights) / np.sum(weights, axis=0)
 
         if estimator_error >= 1 - 1 / self.n_classes_:
-            # print(f"WARNING: estimator_error {estimator_error} >= {1 - 1 / self.n_classes_}")
             return None, None, None
 
         estimator_weight = self.learning_rate_ * np.log((1 - estimator_error) / estimator_error) + np.log(self.n_classes_ - 1)
 
         if estimator_weight <= 0:
-            # print(f"WARNING: estimator_weight {estimator_weight} <= 0")
             return None, None, None
 
         weights *= np.exp(estimator_weight * incorrect)
@@ -217,9 +230,33 @@ class Boost:
         return np.array(weights), estimator_weight, estimator_error
 
     def __predict(self, X, p):
+        """
+        Internal prediction process
+        :param X: X data to predict over
+        :type X: 2-dimensional np.array[np.array[float]]
+        :param p: Estimator to predict
+        :type p: class<self.base_learner_> object
+        :returns: Prediction from the estimator
+        :rtype: np.array[np.array[float]]
+        """
+        
         return p.predict(np.array(X))
 
     def update_prediction(self, p, X, t, a):
+        """
+        Optimized prediction for Boost().update_fit
+        :param p: Previous prdiction
+        :type p: np.array[np.array[float]]
+        :param X: X data to predict over
+        :type X: np.array[np.array[float]]
+        :param t: new estimator to predict
+        :type t: class<self.base_learner_> object
+        :param a: Alpha for the new estimator
+        :type a: float
+        :returns: New prediction
+        :rtype: np.array[np.array[float]]
+        """
+
         n_classes = self.n_classes_
         classes = self.classes_[:, np.newaxis]
         pred = (t.predict(X) == classes).T * a
@@ -234,9 +271,25 @@ class Boost:
         return p
 
     def reduce_prediction(self, p):
+        """
+        Collapse predictions to single class
+        :param p: Predictions
+        :type p: np.array[np.array[float]]
+        :returns: Class number predictions
+        :rtype: np.array[int]
+        """
+
         return self.classes_.take(np.argmax(p, axis=1), axis=0)
 
     def predict(self, X):
+        """
+        Run overall prediction
+        :param X: X data to predict over
+        :type X: np.array[np.array[float]]
+        :returns: class predictions
+        :rtype: np.array[int]
+        """
+
         n_classes = self.n_classes_
         classes = self.classes_[:, np.newaxis]
         pred = sum((estimator.predict(X) == classes).T * a for estimator, a in zip(self.estimators_, self.alphas_))
@@ -249,6 +302,17 @@ class Boost:
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)
     
     def loss(self, Y, f, K=False):
+        """
+        :param Y: Known classifications
+        :type Y: np.array[int]
+        :param f: Predictions from previous forward pass
+        :type f: np.array[np.array[float]]
+        :param K: Number of classes in the data set. Default=False
+        :type K: int
+        :returns: Loss calculation for the given data set
+        :rtype: float
+        """
+
         if not K:
             K = self.n_classes_
         y = np.ones(shape=f.shape) * (-1/(K-1))
@@ -259,6 +323,15 @@ class Boost:
         return np.sum([np.exp((-1/K) * (y[:i].T @ f[:i])) for i in range(f.shape[1])])
 
     def accuracy(self, y_hat, y_true):
+        """
+        :param y_hat: Predicted classes
+        :type y_hat: np.array[int]
+        :param y_true: Known classes
+        :type y_true: np.array[int]
+        :returns: Accuracy of predictions
+        :rtype: float
+        """
+
         ones = np.where(y_hat == y_true, 1, 0)
         solid = np.ones((1,len(y_hat)))
         return ((ones @ ones.T) / (solid @ solid.T))[0][0]
@@ -269,6 +342,25 @@ class GradientDescent:
         pass
 
     def sgdmethod(X, y, regparam, w1, T, a, m):
+        """
+        :param X: X data to train over
+        :type X: np.array[np.array[float]] or np.array[float]
+        :param y: Y data to compare to
+        :type y: np.array[int]
+        :param regparam: Regularization parameter lambda
+        :type regparam: float
+        :param w1: Initial weights and biases
+        :type w1: list[list[float], list[float]]
+        :param T: Number of iterations to run
+        :type T: int
+        :param a: Weight of alpha modifier
+        :type a: float
+        :param m: Regularizer for gradients
+        :type m: float
+        :returns: Weights of iterative models
+        :rtype: List[List[float],List[float]]
+        """
+
         t = 0
         X_pos = 0
         X_batch = None
@@ -306,6 +398,17 @@ class GradientDescent:
         return w
         
     def subgradient_loss(x, y, w):
+        """
+        :param x: X data
+        :type X: np.array[float]
+        :param y: Y data
+        :type y: np.array[int]
+        :param w: weights and biases
+        :type w: List[List[float], List[float]]
+        :returns: Subgradient loss
+        :rtype: float
+        """
+
         v = [0,0]
         b = w[1]
         w = w[0]
@@ -315,9 +418,29 @@ class GradientDescent:
         return v
 
     def subgradient_regularizer(w):
+        """
+        :param w: Weights
+        :type w: List[List[float],List[float]]
+        :returns: Subgradient for the regularizer
+        :rtype: List[float]
+        """
+
         return w[0]
 
     def risk(X,y,w,lam):
+        """
+        :param X: X data
+        :type X: List[float]
+        :param y: Y data
+        :type y: List[int]
+        :param w: Weights
+        :type w: List[List[float],List[float]]
+        :param lam: Lambda regularizer
+        :type lam: float
+        :returns: Model risk
+        :rtype: float
+        """
+
         b = w[1]
         w = w[0]
         hingesum = 0
@@ -328,6 +451,19 @@ class GradientDescent:
         return (1/X.shape[0])*hingesum + (lam/2)*regsum
 
     def loss(X,y,weight,lam):
+        """
+        :param X: X data
+        :type X: List[float]
+        :param y: Y data
+        :type y: List[int]
+        :param weight: Weights to be applied
+        :type weight: List[List[float],List[float]]
+        :param lam: Lambda regularizer
+        :type lam: float
+        :returns: Model loss
+        :rtype: float
+        """
+
         summand = 0
         for i in range(X.shape[0]):
             summand += max(1 - y[i] * (np.dot(weight[0],X[i]) + weight[1]),0)
@@ -335,6 +471,17 @@ class GradientDescent:
         return summand + lam/2 * sum(val ** 2 for val in weight[0]) 
 
     def accuracy(X,y,weight):
+        """
+        :param X: X data
+        :type X: List[float]
+        :param y: Y data
+        :type y: List[int]
+        :param weight: Weights to be applied
+        :type weight: List[List[float],List[float]]
+        :returns: Model accuracy
+        :rtype: float
+        """
+
         total = 0
         for i in range(X.shape[0]):
             if (y[i]==0 and np.dot(weight,X[i])==0) or (y[i]*np.dot(weight,X[i]) > 0):
@@ -342,4 +489,11 @@ class GradientDescent:
         return total/X.shape[0]
       
 def ShallowTree(d = 2):
+    """
+    :param d: Depth of trees. Default=2
+    :type d: int
+    :returns: sklearn DecisionTreeClassifier with given depth
+    :rtype: class<sklearn.tree.DecisionTreeClassifier> object
+    """
+
     return DecisionTreeClassifier(max_depth=d)
