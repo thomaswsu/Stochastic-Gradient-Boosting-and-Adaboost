@@ -15,3 +15,7 @@ In this repository we evaluate the performance of Stochastic Boosting, Tradition
   **experiment.ipynb** - Code for running analysis on experiment
   
   **functions.py** - Contains Boost and GradientDescent classes
+
+## Directories
+
+  **data** - Directory containing data files
