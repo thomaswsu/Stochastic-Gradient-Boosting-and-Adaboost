@@ -8,7 +8,7 @@ Link to data on Google sheets - https://docs.google.com/spreadsheets/d/1jgTfXJok
 
 ## Files
 
-  **Stochastic Gradient Boosting.pdf** - Slide Show
+  **Stochastic Gradient Boosting.pdf** - Slideshow PDF
   
   **Randomized_Algorithms_for_Machine_Learning_and_Optimization_Project_HW.pdf** - Homework PDF
   
