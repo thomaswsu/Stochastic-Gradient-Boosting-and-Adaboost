@@ -6,7 +6,13 @@ In this repository we evaluate the performance of Stochastic Boosting and Tradit
 
 ## Files
 
-  **HW_test.ipynb** - Test code for the homework assignment
+  **** - Test code for the homework assignment
+
+  **Stochastic Gradient Boosting.pdf** - Slide Show
+  
+  **Randomized_Algorithms_for_Machine_Learning_and_Optimization_Project_HW.pdf** - Homework PDF
+  
+  **Experiment_Data.pdf** - Experiment Results and Graphs (Link to Google Sheets Above)
   
   **accent_data.csv** - Data set for Speaker Accent Recognition
   
