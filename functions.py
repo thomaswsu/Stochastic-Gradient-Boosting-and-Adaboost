@@ -5,16 +5,16 @@ from time import time
 import matplotlib.pyplot as plt
 
 class Boost:
-"""
-:param n_estimators: number of Weak Learners to be predicted over. Default=50
-:type n_estimators: int > 0
-:param learning_rate: Weight applied to gradients. Default=1
-:type learning_rate: float
-:param random_state: Random seed for replicating results. Default=None
-:type random_state: int
-:param base_learner: The Weak Learner type to be used and duplicated. Default=DecisionTreeClassifier(max_depth=2)
-:type base_learner: sklearn Classifier object
-"""
+    """
+    :param n_estimators: number of Weak Learners to be predicted over. Default=50
+    :type n_estimators: int > 0
+    :param learning_rate: Weight applied to gradients. Default=1
+    :type learning_rate: float
+    :param random_state: Random seed for replicating results. Default=None
+    :type random_state: int
+    :param base_learner: The Weak Learner type to be used and duplicated. Default=DecisionTreeClassifier(max_depth=2)
+    :type base_learner: sklearn Classifier object
+    """
 
     def __init__(self, n_estimators=50, learning_rate=1, random_state=None, base_learner=DecisionTreeClassifier(max_depth=2)):
         self.n_estimators_ = n_estimators
