@@ -7,7 +7,9 @@ In this repository we evaluate the performance of Stochastic Boosting and Tradit
 Link to data on Google sheets - https://docs.google.com/spreadsheets/d/1jgTfXJokuQQEXjhYRAtvr3QHVrpV9Q-x_4oFygjwDdU/edit?usp=sharing
 
 ## Files
-
+  
+  **Presentation.mp4** - Video of Team Presesenting Slideshow
+  
   **Stochastic Gradient Boosting.pdf** - Slideshow PDF
   
   **Randomized_Algorithms_for_Machine_Learning_and_Optimization_Project_HW.pdf** - Homework PDF
